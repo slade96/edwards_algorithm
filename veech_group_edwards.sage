@@ -72,11 +72,13 @@ def veech_group(X):
 	# vertices_in_disjoint_planes[P][n] gives a list of vertex data such that separatrices leaving these vertices should develop in the n^th copy of the plane corresponding to singularity P
 	# There is some ambiguity for some vertices, such as vertex 5 of the regular hexagon...these ambiguous vertices where separatrices may develop in either the n^th or (n+1)^st plane lead the list corresponding to the (n+1)^st plane
 	vertices_in_disjoint_planes=[]
+	first_edge_of_singularity=[]
 	for P in range(X._num_singularities):
 		copy_of_plane=0
 		vertices_in_disjoint_planes_P=[]
 		singularity_P=sorted(vertex_equivalence_classes[P])
 		vertex_data=singularity_P[0]
+		first_edge_of_singularity.append(X.polygon(vertex_data[0]).edge(vertex_data[1]))
 		P_angle=X.polygon(vertex_data[0]).angle(vertex_data[1])
 		# direction=X.polygon(vertex_data[0]).edge(vertex_data[1])
 		vertices_in_disjoint_planes_P_copy_of_plane=[vertex_data]
@@ -102,7 +104,7 @@ def veech_group(X):
 	def marked_periods(radius):
 		MPr=[]
 		for P in range(X._num_singularities):
-			MPr_P=[[] for i in X.angles()[P]]
+			MPr_P=[[] for i in range(X.angles()[P])]
 			for vertex_data in vertex_equivalence_classes[P]:
 				copy_of_plane=[n for n in range(len(vertices_in_disjoint_planes[P])) if vertex_data in vertices_in_disjoint_planes[P][n]][0]
 				polygon=vertex_data[0]
@@ -133,8 +135,18 @@ def veech_group(X):
 
 				# saddle_connection_endpoints=[poly.flow_to_exit(V(point),V(direction))[0] for direction in saddle_connections_directions]
 				# holonomies=[endpoint-point for endpoint in saddle_connection_endpoints]
-				for endpoint in saddle_connection_endpoints:
-					MPr_P[copy_of_plane].append(endpoint)
+				if vertex_data==vertices_in_disjoint_planes[P][copy_of_plane][0]:
+					for i in range(len(saddle_connections_directions)):
+						v0=first_edge_of_singularity[P]
+						v1=saddle_connections_directions[i]
+						M=matrix([[v0[0],v1[0]],[v0[1],v1[1]]])
+						if det(M)<0:
+							MPr_P[copy_of_plane-1].append(saddle_connection_endpoints[i])
+						else:
+							MPr_P[copy_of_plane].append(saddle_connection_endpoints[i])
+				else:	
+					for endpoint in saddle_connection_endpoints:
+						MPr_P[copy_of_plane].append(endpoint)
 			MPr.append(MPr_P)		
 		return MPr 
 	
