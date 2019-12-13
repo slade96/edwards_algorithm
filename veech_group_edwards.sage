@@ -154,6 +154,23 @@ b=sqrt(2)
 ##########################################################
 ##########################################################
 
+# To be used below so that holonomies may be sorted counter-clockwise
+def ang(holonomy):
+	x=holonomy[0]
+	y=holonomy[1]
+	if x>0:
+		if y>=0:
+			theta=arctan(y/x)/(2*pi)
+		else:
+			theta=arctan(y/x)/(2*pi)+1
+	elif x<0:
+			theta=arctan(y/x)/(2*pi)+1/2
+	else:
+		if y>0:
+			theta=1/4
+		else: theta=3/4
+	return RLF(theta)
+
 # This records information to determine which disjoint copy of the plane an element of $MP_P^r(X,\omega)$ should lie in
 # vertices_in_disjoint_planes[P][n] gives a list of vertex data (polygon,vertex) such that separatrices leaving these vertices should develop in the n^th copy of the plane corresponding to singularity P
 # There is ambiguity for some vertices, such as vertex 6 of the regular octagon...these ambiguous vertices where separatrices may develop in either the n^th or (n+1)^st plane lead the list corresponding to the (n+1)^st plane
@@ -162,7 +179,7 @@ first_edge_from_singularity=[]
 cone_angles=[]
 for P in range(X._num_singularities):
 	vertex_angles=[X.polygon(vertex_data[0]).angle(vertex_data[1]).numerical_approx() for vertex_data in vertex_equivalence_classes[P]]
-	cone_angles.append(int(sum(vertex_angles)))
+	cone_angles.append(round(sum(vertex_angles)))
 	copy_of_plane=0
 	
 	# Will contain lists where the (copy_of_plane)^th list contains vertex data (polygon,vertex) with vertices corresponding to the (copy_of_plane)^th copy of the plane that corresponds to singularity P
@@ -171,9 +188,18 @@ for P in range(X._num_singularities):
 	# Canonicalizes the set of vertices corresponding to singularity P by vertex data (polygon,vertex): sorts by lowest polygon index then lowest vertex index
 	singularity_P=sorted(vertex_equivalence_classes[P])
 
-	vertex_data=singularity_P[0]
-	first_edge_from_singularity.append(X.polygon(vertex_data[0]).edge(vertex_data[1]))
-	P_angle=X.polygon(vertex_data[0]).angle(vertex_data[1])
+	# Ensures that the vector e1=(1,0) is in the interior of the polgon at vertex_data
+	e1_in_interior=False
+	i=0
+	while e1_in_interior==False:
+		vertex_data=singularity_P[i]
+		right_most_edge=X.polygon(vertex_data[0]).edge(vertex_data[1])
+		left_most_edge=-X.polygon(vertex_data[0]).edge((vertex_data[1]-1)%X.polygon(vertex_data[0]).num_edges())
+		if ang(right_most_edge)==0 or ang(right_most_edge)>ang(left_most_edge):
+			e1_in_interior=True
+		i=i+1
+
+	P_angle=ang(left_most_edge)
 
 	# Will be the (copy_of_plane)^th list inside vertices_in_disjoint_planes_P
 	vertices_in_disjoint_planes_P_copy_of_plane=[vertex_data]
@@ -188,74 +214,45 @@ for P in range(X._num_singularities):
 		vertices_in_disjoint_planes_P_copy_of_plane.append(vertex_data)
 	vertices_in_disjoint_planes.append(vertices_in_disjoint_planes_P)
 
-# To be used below so that holonomies may be sorted counter-clockwise
-def ang(holonomy):
-	x=holonomy[0]
-	y=holonomy[1]
-	if x>0:
-		if y>=0:
-			theta=arctan(y/x)
-		else:
-			theta=arctan(y/x)+2*pi
-	elif x<0:
-			theta=arctan(y/x)+pi
-	else:
-		if y>0:
-			theta=pi/2
-		else: theta=3*pi/2
-	return theta
+
 
 ### To do: create an optional parameter to add to previously computed marked_periods(radius0) ###
 def marked_periods(radius):
 	MPr=[]
 	for P in range(X._num_singularities):
 		MPr_P=[[] for i in range(cone_angles[P])]
-		angle_of_slice_of_planes=ang(first_edge_from_singularity[P])
-		for vertex_data in vertex_equivalence_classes[P]:
-			copy_of_plane=[n for n in range(len(vertices_in_disjoint_planes[P])) if vertex_data in vertices_in_disjoint_planes[P][n]][0]
-			polygon_start=vertex_data[0]
-			vertex_start=vertex_data[1]
-			saddle_connections=X.saddle_connections(radius^2,polygon_start,vertex_start)
-			saddle_connections_directions=[sc.direction() for sc in saddle_connections]
-			# First see if the current vertex is ambiguous (in the sense that saddle connections from it may be assigned to the current copy of the plane or the previous copy)
-			if vertex_data==vertices_in_disjoint_planes[P][copy_of_plane][0]:
-				for i in range(len(saddle_connections)):
-					sc=saddle_connections[i]
-					v0=first_edge_from_singularity[P]
-					v1=saddle_connections_directions[i]
-					M=matrix([[v0[0],v1[0]],[v0[1],v1[1]]])
-					holonomy=sc.holonomy()
-					holonomy_angle=ang(holonomy)
-					# If sc leaves its singularity clockwise of where the current copy of the plane is sliced, then its holonomy vector is assigned to the previous copy of the plane
-					if det(M)<0:
-						# MPr_P[copy_of_plane-1].append([holonomy,sc,(copy_of_plane-1)*2*pi+ang(holonomy)])
-						if holonomy_angle>angle_of_slice_of_planes:
-							cumulative_angle_from_initial_slice=2*pi*(copy_of_plane-1)+(holonomy_angle-angle_of_slice_of_planes)
-							MPr_P[copy_of_plane-1].append([holonomy,sc,cumulative_angle_from_initial_slice])
+		for copy_of_plane in range(len(vertices_in_disjoint_planes[P])):
+			for vertex_data in vertices_in_disjoint_planes[P][copy_of_plane]:			
+				polygon_start=vertex_data[0]
+				vertex_start=vertex_data[1]
+				saddle_connections=X.saddle_connections(radius^2,polygon_start,vertex_start)
+				saddle_connections_directions=[sc.direction() for sc in saddle_connections]
+				# First see if the current vertex is ambiguous (in the sense that saddle connections from it may be assigned to the current copy of the plane or the previous copy)
+				if vertex_data==vertices_in_disjoint_planes[P][copy_of_plane][0]:
+					right_most_edge=X.polygon(vertex_data[0]).edge(vertex_data[1])
+					left_most_edge=-X.polygon(vertex_data[0]).edge((vertex_data[1]-1)%X.polygon(vertex_data[0]).num_edges())
+					right_most_edge_angle=ang(right_most_edge)
+					left_most_edge_angle=ang(left_most_edge)
+					for i in range(len(saddle_connections)):
+						sc=saddle_connections[i]
+						holonomy=sc.holonomy()
+						holonomy_angle=ang(holonomy)
+						# If sc leaves its singularity clockwise of the vector (1,0), then its holonomy vector is assigned to the previous copy of the plane
+						if right_most_edge_angle>left_most_edge_angle and holonomy_angle>=right_most_edge_angle:
+							cumulative_angle=(copy_of_plane-1)%cone_angles[P]+holonomy_angle
+							MPr_P[copy_of_plane-1].append([holonomy,sc,cumulative_angle])
+						# Otherwise its holonomy vector is assigned to the current copy of the plane
 						else:
-							cumulative_angle_from_initial_slice=2*pi*(copy_of_plane)+(holonomy_angle-angle_of_slice_of_planes)
-							MPr_P[copy_of_plane-1].append([holonomy,sc,cumulative_angle_from_initial_slice])
-					# Otherwise its holonomy vector is assigned to the current copy of the plane
-					else:
-						if holonomy_angle>=angle_of_slice_of_planes:
-							cumulative_angle_from_initial_slice=2*pi*(copy_of_plane)+(holonomy_angle-angle_of_slice_of_planes)
-							MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle_from_initial_slice])
-						else:
-							cumulative_angle_from_initial_slice=2*pi*(copy_of_plane+1)+(holonomy_angle-angle_of_slice_of_planes)
-							MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle_from_initial_slice])
-			# These are the unambiguous vertices
-			else:	
-				for i in range(len(saddle_connections)):
-					sc=saddle_connections[i]
-					holonomy=sc.holonomy()
-					holonomy_angle=ang(holonomy)
-					# MPr_P[copy_of_plane].append([holonomy,sc,copy_of_plane*2*pi+ang(holonomy)])
-					if holonomy_angle>=angle_of_slice_of_planes:
-						cumulative_angle_from_initial_slice=2*pi*(copy_of_plane)+(holonomy_angle-angle_of_slice_of_planes)
-						MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle_from_initial_slice])
-					else:
-						cumulative_angle_from_initial_slice=2*pi*(copy_of_plane+1)+(holonomy_angle-angle_of_slice_of_planes)
-						MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle_from_initial_slice])
+							cumulative_angle=copy_of_plane+holonomy_angle
+							MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle])
+				# These are the unambiguous vertices
+				else:	
+					for i in range(len(saddle_connections)):
+						sc=saddle_connections[i]
+						holonomy=sc.holonomy()
+						holonomy_angle=ang(holonomy)
+						cumulative_angle=copy_of_plane+holonomy_angle
+						MPr_P[copy_of_plane].append([holonomy,sc,cumulative_angle])
 		MPr.append(MPr_P)
 		# Sort holonomies in each copy of the plane by cumulative counterclockwise angle from (1,0) on 0th copy of plane
 		for copy_of_plane in range(len(MPr[P])):
@@ -267,9 +264,13 @@ MP_2rho=marked_periods(2*rho)
 MP_2rho_sorted=sorted(MP_2rho,key=len)
 cone_angles_sorted=sorted(cone_angles)
 
+# This is the same as MP_2rho_sorted, but only with the holonomy information (i.e., we drop the saddle connection data and angle data); this will be used in the function A_r() below
+MP_2rho_sorted_holonomies=[[[MP_2rho_sorted[P][copy_of_plane][i][0] for i in range(len(MP_2rho_sorted[P][copy_of_plane]))] for copy_of_plane in range(len(MP_2rho_sorted[P]))] for P in range(X._num_singularities)]
+# This is just a list of the saddle connections from MP_2rho_sorted and is not broken up into sub-lists corresponding to singularities or copies of the plane; this again will be used in the function A_r() below to check the Z2-action
+MP_2rho_sorted_saddle_connections=[MP_2rho_sorted[P][copy_of_plane][i][1] for P in range(X._num_singularities) for copy_of_plane in range(len(MP_2rho_sorted[P])) for i in range(len(MP_2rho_sorted[P][copy_of_plane]))]
+num_holonomies_in_MP_2rho=len(MP_2rho_sorted_saddle_connections)
 ##########################################################
 ##########################################################
-
 
 
 
@@ -285,8 +286,6 @@ cone_angles_sorted=sorted(cone_angles)
 #############################################################################################################################
 #############################################################################################################################
 
-### NOT PICKING UP ALL THE INVERSE MATRICES OF THE SURFACE IN THE COMMENTS AT THE TOP
-
 ### To do: create an optional parameter to add to previously computed A_r(radius0,norm_bound0) ###
 def A_r(radius,norm_bound):	
 	# matrices_to_check will be a list comprised of matrices in $\text{SL}_2\mathbb{R}$ whose Frobenius norms are bounded above by norm_bound and whose inverses take a basis of vectors in marked_periods(2*rho) to another basis of vectors in marked_periods(radius)
@@ -294,6 +293,8 @@ def A_r(radius,norm_bound):
 	MPr=marked_periods(radius)
 	MPr_sorted=sorted(MPr,key=len)
 
+
+	### CHECK THIS PROCESS TO MAKE SURE IT'S FINDING ENOUGH MATRICES FOR matrices_to_check; IT DOESN'T SEEM RIGHT FOR THE SURFACE IN THE COMMENTS AT THE TOP ###
 	# Basis from projection of MP_2rho onto complex plane
 	v0=MP_2rho_sorted[0][0][0][0]
 	v1=MP_2rho_sorted[0][0][1][0]
@@ -353,28 +354,20 @@ def A_r(radius,norm_bound):
 		for P in range(X._num_singularities):
 			number_of_planes=len(MPr[P])
 			F_M_MPr_P_bounded_by_2rho=[[] for c in range(number_of_planes)]
-			angle_of_image_of_slice=ang(M*MPr[P][0][0][0])
-			angle_of_original_slice=ang(first_edge_from_singularity[P])
-			if angle_of_image_of_slice>=angle_of_original_slice:
-				counterclockwise_angle_of_image_slice_from_original_slice=angle_of_image_of_slice-angle_of_original_slice
-			else:
-				counterclockwise_angle_of_image_slice_from_original_slice=2*pi+(angle_of_image_of_slice-angle_of_original_slice)
+			angle_of_image_of_e1=ang(M*vector((1,0)))
 			for copy_of_plane in range(number_of_planes):
 				for i in range(len(MPr[P][copy_of_plane])):
 					mp=MPr[P][copy_of_plane][i][0]
 					point=M*vector([mp[0],mp[1]])
 					if point[0]^2+point[1]^2<=(2*rho)^2:
 						angle_of_point=ang(point)
-						if angle_of_point>=angle_of_original_slice:
-							counterclockwise_angle_of_point_from_original_slice=angle_of_point-angle_of_original_slice
-						else:
-							counterclockwise_angle_of_point_from_original_slice=2*pi+(angle_of_point-angle_of_original_slice)
 						# If the counter-clockwise angle of `point' from angle_of_image_of_slice is greater than or equal to counterclockwise_angle_of_image_slice_from_original_slice, then we assign this marked period to this copy_of_plane; otherwise,it gets assigned to the next copy_of_plane (modulo the number of copies of the plane)
-						# We store this data as a list: [holonomy, preimage's corresponding saddle connection on X (as recorded in flatsurf), angle of holonomy from angle_of_original slice in a single copy of the plane, cumulative angle of preimage of this marked period from slice on 0th copy of plane]
-						if counterclockwise_angle_of_point_from_original_slice>=counterclockwise_angle_of_image_slice_from_original_slice:
-							F_M_MPr_P_bounded_by_2rho[copy_of_plane].append([point,MPr[P][copy_of_plane][i][1],counterclockwise_angle_of_point_from_original_slice,MPr[P][copy_of_plane][i][2]])
+						# We store this data as a list: [holonomy, preimage's corresponding saddle connection on X (as recorded in flatsurf), cumulative angle of holonomy from (1,0) in a the 0th copy of the plane, cumulative angle of preimage of this marked period from (1,0) on 0th copy of plane]
+						if angle_of_point>=angle_of_image_of_e1:
+							F_M_MPr_P_bounded_by_2rho[copy_of_plane].append([point,MPr[P][copy_of_plane][i][1],copy_of_plane+angle_of_point,MPr[P][copy_of_plane][i][2]])
 						else:
-							F_M_MPr_P_bounded_by_2rho[(copy_of_plane+1)%number_of_planes].append([point,MPr[P][copy_of_plane][i][1],counterclockwise_angle_of_point_from_original_slice,MPr[P][copy_of_plane][i][2]])
+							F_M_MPr_P_bounded_by_2rho[(copy_of_plane+1)%number_of_planes].append([point,MPr[P][copy_of_plane][i][1],(copy_of_plane+1)%number_of_planes+angle_of_point,MPr[P][copy_of_plane][i][2]])
+
 			# Sort holonomies in each copy of the plane by counterclockwise angle from original slice in chosen copy of plane
 			for copy_of_plane in range(len(MPr[P])):
 				F_M_MPr_P_bounded_by_2rho[copy_of_plane].sort(key=lambda x:x[2])
@@ -383,145 +376,42 @@ def A_r(radius,norm_bound):
 		F_M_MPr_bounded_by_2rho_sorted=sorted(F_M_MPr_bounded_by_2rho,key=len)
 
 		# Now we test various permutations of singularities of the same cone angle within F_M_MPr_bounded_by_2rho_sorted as well as cyclic permutations of copies of the plane corresponding to each singularity
-		# We first check if the holonomies of a permutation of F_M_MPr_bounded_by_2rho_sorted match those of MP_2rho_sorted; if so, we then test to see if the $\mathbb{Z}_2$-action is the same
-	# 	for permute_singularities in permutations_of_singularities.list():
-	# 				F_M_first_copy=deepcopy(F_M_MPr_bounded_by_2rho_sorted)
-	# 				place=0
-	# 				for n in range(len(permutation_group_orders)):
-	# 					num_sings_of_same_angle=permutation_group_orders[n]
-	# 					F_M_first_copy[place:place+num_sings_of_same_angle]=permute_singularities[n](F_M_first_copy[place:place+num_sings_of_same_angle])
-	# 					place+=num_sings_of_same_angle
-	# 				for permute_planes in permutations_of_copies_of_plane.list():
-	# 					F_M_copy=deepcopy(F_M_first_copy)
-	# 					for P in range(X._num_singularities):
-	# 						permute_planes_P=permute_planes[P]
-	# 						F_M_copy[P]=permute_planes_P(F_M_copy[P])
-	# 					M_is_a_keeper=True
-	# 					for P0 in range(X._num_singularities):
-	# 						for copy_of_plane0 in range(len(F_M_copy[P0])):
-	# 							# Check that the holonomies associated to a particular singularity and copy of the plane match; if so, check the $\mathbb{Z}_2$-action
-	# 							F_M_holonomies=[F_M_copy[P0][copy_of_plane0][i][0] for i in range(len(F_M_copy[P0][copy_of_plane0]))]
-	# 							MP_2rho_holonomies=[MP_2rho_sorted[P0][copy_of_plane0][i][0] for i in range(len(MP_2rho_sorted[P0][copy_of_plane0]))]
-	# 							if F_M_holonomies==MP_2rho_holonomies:
-	# 								for i in range(len(F_M_copy[P0][copy_of_plane0])):
-	# 									# if F_M_copy[P0][copy_of_plane0][i][0]==MP_2rho_sorted[P0][copy_of_plane0][i][0]:
-	# 									F_M_saddle_connection_on_X=F_M_copy[P0][copy_of_plane0][i][1]
-	# 									F_M_saddle_connection_preimage_angle=F_M_copy[P0][copy_of_plane0][i][3]
-	# 									MPr_saddle_connection_on_X=MP_2rho_sorted[P0][copy_of_plane0][i][1]
-	# 									MPr_saddle_connection_angle=MP_2rho_sorted[P0][copy_of_plane0][i][2]
-	# 									F_M_saddle_connection_on_X_opposite=F_M_saddle_connection_on_X.invert()
-	# 									MPr_saddle_connection_on_X_opposite=MPr_saddle_connection_on_X.invert()
-	# 									F_M_found_opposite=False
-	# 									MPr_found_opposite=False
-	# 									for P1 in range(X._num_singularities):
-	# 										for copy_of_plane1 in range(len(MPr[P1])):
-	# 											for j in range(len(MPr[P1][copy_of_plane1])):
-	# 												if MPr[P1][copy_of_plane1][j][1]==F_M_saddle_connection_on_X_opposite:
-	# 													### THINK ABOUT THIS IF X HAS MULTIPLE SINGULARITIES OF DIFFERENT CONE ANGLES ###
-	# 													F_M_angle_difference=(int((MPr[P1][copy_of_plane1][j][2]-F_M_saddle_connection_preimage_angle)/pi)%(2*len(MPr[P1])))*pi
-	# 													F_M_Z2_index=[P1,F_M_angle_difference]
-	# 													F_M_found_opposite=True
-	# 												if MPr[P1][copy_of_plane1][j][1]==MPr_saddle_connection_on_X_opposite:
-	# 													MPr_angle_difference=(int((MPr[P1][copy_of_plane1][j][2]-MPr_saddle_connection_angle)/pi)%(2*len(MPr[P1])))*pi
-	# 													MPr_Z2_index=[P1,MPr_angle_difference]
-	# 													MPr_found_opposite=True
-	# 												if F_M_found_opposite==True and MPr_found_opposite==True:
-	# 													if F_M_Z2_index!=MPr_Z2_index:
-	# 														M_is_a_keeper=False
-	# 													break
-	# 											if M_is_a_keeper==False:
-	# 												break
-	# 										if M_is_a_keeper==False:
-	# 											break
-	# 									# else:
-	# 									# 	M_is_a_keeper=False
-	# 									# 	break
-	# 								if M_is_a_keeper==False:
-	# 									break
-	# 						if M_is_a_keeper==False:
-	# 							break
-	# 					if M_is_a_keeper==True:
-	# 						A_r.append(M)
-	# 						break
-	# 				if M_is_a_keeper==True:
-	# 					break	
-	# return(A_r)
-
-		M_is_a_keeper=[[True for i in range(len(MP_2rho_sorted[P]))] for P in range(len(MP_2rho_sorted))]
+		# We first check if the holonomies of a permutation of F_M_MPr_bounded_by_2rho_sorted match those of MP_2rho_sorted; if so, we then test to see if the Z2-action is the same
 		for permute_singularities in permutations_of_singularities.list():
-					F_M_first_copy=deepcopy(F_M_MPr_bounded_by_2rho_sorted)
-					place=0
-					for n in range(len(permutation_group_orders)):
-						num_sings_of_same_angle=permutation_group_orders[n]
-						F_M_first_copy[place:place+num_sings_of_same_angle]=permute_singularities[n](F_M_first_copy[place:place+num_sings_of_same_angle])
-						place+=num_sings_of_same_angle
-					for permute_planes in permutations_of_copies_of_plane.list():
-						# This will let us end a particular test if it is guaranteed not to work 
-						break_flag=False
-						M_is_a_keeper_flag=[[False for i in range(len(MP_2rho_sorted[P]))] for P in range(len(MP_2rho_sorted))]
-						F_M_copy=deepcopy(F_M_first_copy)
-						for P in range(X._num_singularities):
-							permute_planes_P=permute_planes[P]
-							F_M_copy[P]=permute_planes_P(F_M_copy[P])
-						# M_is_a_keeper=True
-						for P0 in range(X._num_singularities):
-							for copy_of_plane0 in range(len(F_M_copy[P0])):
-								# Check that the holonomies associated to a particular singularity and copy of the plane match; if so, check the $\mathbb{Z}_2$-action
-								F_M_holonomies=[F_M_copy[P0][copy_of_plane0][i][0] for i in range(len(F_M_copy[P0][copy_of_plane0]))]
-								MP_2rho_holonomies=[MP_2rho_sorted[P0][copy_of_plane0][i][0] for i in range(len(MP_2rho_sorted[P0][copy_of_plane0]))]
-								if F_M_holonomies==MP_2rho_holonomies:
-									for i in range(len(F_M_copy[P0][copy_of_plane0])):
-										# if F_M_copy[P0][copy_of_plane0][i][0]==MP_2rho_sorted[P0][copy_of_plane0][i][0]:
-										F_M_saddle_connection_on_X=F_M_copy[P0][copy_of_plane0][i][1]
-										F_M_saddle_connection_preimage_angle=F_M_copy[P0][copy_of_plane0][i][3]
-										MPr_saddle_connection_on_X=MP_2rho_sorted[P0][copy_of_plane0][i][1]
-										MPr_saddle_connection_angle=MP_2rho_sorted[P0][copy_of_plane0][i][2]
-										F_M_saddle_connection_on_X_opposite=F_M_saddle_connection_on_X.invert()
-										MPr_saddle_connection_on_X_opposite=MPr_saddle_connection_on_X.invert()
-										F_M_found_opposite=False
-										MPr_found_opposite=False
-										for P1 in range(X._num_singularities):
-											for copy_of_plane1 in range(len(MPr[P1])):
-												for j in range(len(MPr[P1][copy_of_plane1])):
-													if MPr[P1][copy_of_plane1][j][1]==F_M_saddle_connection_on_X_opposite:
-														### THINK ABOUT THIS IF X HAS MULTIPLE SINGULARITIES OF DIFFERENT CONE ANGLES ###
-														F_M_angle_difference=(int((MPr[P1][copy_of_plane1][j][2]-F_M_saddle_connection_preimage_angle)/pi)%(2*len(MPr[P1])))*pi
-														F_M_Z2_index=[P1,F_M_angle_difference]
-														F_M_found_opposite=True
-													if MPr[P1][copy_of_plane1][j][1]==MPr_saddle_connection_on_X_opposite:
-														MPr_angle_difference=(int((MPr[P1][copy_of_plane1][j][2]-MPr_saddle_connection_angle)/pi)%(2*len(MPr[P1])))*pi
-														MPr_Z2_index=[P1,MPr_angle_difference]
-														MPr_found_opposite=True
-													if F_M_found_opposite==True and MPr_found_opposite==True:
-														if F_M_Z2_index==MPr_Z2_index:
-															M_is_a_keeper_flag[P0][copy_of_plane0]=True
-														break
-								if M_is_a_keeper_flag[P0][copy_of_plane0]==False:
-									break_flag=True
-									break
-						if M_is_a_keeper_flag==M_is_a_keeper:
-							A_r.append(M)
+			F_M_first_copy=deepcopy(F_M_MPr_bounded_by_2rho_sorted)
+			place=0
+			for n in range(len(permutation_group_orders)):
+				num_sings_of_same_angle=permutation_group_orders[n]
+				F_M_first_copy[place:place+num_sings_of_same_angle]=permute_singularities[n](F_M_first_copy[place:place+num_sings_of_same_angle])
+				place+=num_sings_of_same_angle
+			# For each permutation of singularities, we cyclically permute the copies of the plane associated to a particular singularity
+			for permute_planes in permutations_of_copies_of_plane.list():
+				F_M_copy=deepcopy(F_M_first_copy)
+				for P in range(X._num_singularities):
+					permute_planes_P=permute_planes[P]
+					F_M_copy[P]=permute_planes_P(F_M_copy[P])
+				# Now we check to see if the holonomies in each copy of the plane corresponding to each singularity of of MP_2rho_sorted match those of F_M_copy
+				# List of holonomies associated to a particular singularity and copy of the plane
+				F_M_copy_holonomies=[[[F_M_copy[P][copy_of_plane][i][0] for i in range(len(F_M_copy[P][copy_of_plane]))] for copy_of_plane in range(len(F_M_copy[P]))] for P in range(X._num_singularities)]
+				# List of all saddle connection data from X; this is not associated to a particular singularity and copy of the plane, but corresponds to the same ordering of the information in F_M_copy_holonomies
+				F_M_copy_saddle_connections=[F_M_copy[P][copy_of_plane][i][1] for P in range(X._num_singularities) for copy_of_plane in range(len(F_M_copy[P])) for i in range(len(F_M_copy[P][copy_of_plane]))]
+				# If the holonomies are the same, then we check the Z2-action
+				if F_M_copy_holonomies==MP_2rho_sorted_holonomies:
+					Z2_action_agrees_flag=True
+					for i in range(num_holonomies_in_MP_2rho):
+						# We find the saddle connection on X corresponding to a particular holonomy in MP_2rho
+						mp_saddle_connection=MP_2rho_sorted_saddle_connections[i]
+						# For the same holonomy in F_M_copy (same even w/r/t singularity and copy of the plane since F_M_copy_holonomies=MP_2rho_sorted_holonomies and the orderings of F_M_copy_saddle_connections and MP_2rho_sorted_saddle_connections are the same), we find the saddle connection on X corresponding to the preimage under M of this holonomy vector
+						Mmp_preimage_saddle_connection=F_M_copy_saddle_connections[i]
+						# These are the identical but oppositely directed saddle connections of those found above
+						mp_saddle_connection_inverse=mp_saddle_connection.invert()
+						Mmp_preimage_saddle_connection_inverse=Mmp_preimage_saddle_connection.invert()
+						# For the Z2-action to match, these inverse saddle connections must correspond to the same holonomies in F_M_copy_holonomies and MP_2rho_sorted_holonomies; otherwise the Z2-action is different and F_M_copy does not equal MP_2rho
+						if MP_2rho_sorted_saddle_connections.index(mp_saddle_connection_inverse)!=F_M_copy_saddle_connections.index(Mmp_preimage_saddle_connection_inverse):
+							Z2_action_agrees_flag=False
 							break
-
-
-
-
-					# 							if M_is_a_keeper==False:
-					# 								break
-					# 						if M_is_a_keeper==False:
-					# 							break
-					# 					# else:
-					# 					# 	M_is_a_keeper=False
-					# 					# 	break
-					# 				if M_is_a_keeper==False:
-					# 					break
-					# 		if M_is_a_keeper==False:
-					# 			break
-					# 	if M_is_a_keeper==True:
-					# 		A_r.append(M)
-					# 		break
-					# if M_is_a_keeper==True:
-					# 	break	
+					if Z2_action_agrees_flag==True:
+						A_r.append(M)
 	return(A_r)
 
 Ar=A_r(r,b)
