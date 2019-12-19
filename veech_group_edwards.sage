@@ -516,7 +516,7 @@ while ContainmentVolume==infinity and iteration<iteration_limit:
 	# These will record perpendicular bisectors between I and M*I for each M in Ar_mod_MinusIdentity
 	# Each geodesic is recorded as [feet,polygon vertices,matrix,(1/2)d(I,M*I)] where... 
 	# ...feet is a list [l,r] of left and right feet of the geodesic (where r=infinity if it is vertical);
-	# ...polygon vertices is None unless it is verified that the geodesic is a side of the polygon formed by intersecting all halfplanes containing I, in which case we record vertices as [v0,v1] where v0 is the left-most vertex (or has smallest imaginary part if the geodesic is vertical);
+	# ...polygon vertices is a list recording the real and imaginary parts of the counter-clockwise-most and clockwise-most, respectively, vertices (viewed from the interior of the polygon) corresponding to a geodesic gamma; unless it is verified that gamma contributes to the sides of the polygon and that the vertex is in the upper-half plane, these 'vertices' are the real and imaginary parts of the feet of gamma
 	# ...matrix is the matrix M in M*I;
 	# ...(1/2)d(I,M*I) is the minimum distance between I and the perpendicular bisector between I and M*I (this is giveen by chi_2(||M||); see pp. 98-100 of Edwards)
 	vertical_geodesics=[]
@@ -566,13 +566,14 @@ while ContainmentVolume==infinity and iteration<iteration_limit:
 					perp_bisector_l_foot=foot1
 					perp_bisector_r_foot=foot0
 			if perp_bisector_is_vertical==True:
-				vertical_geodesics.append([[perp_bisector_l_foot,perp_bisector_r_foot],[[perp_bisector_l_foot,0],[perp_bisector_r_foot,0]],M,chi_2(frobenius_norm)])
 				perp_bisector_plots.append(implicit_plot(x-perp_bisector_l_foot,(x,x_min,x_max),(y,y_min,y_max)))
 				# If the vertical perpendicular bisector is left of i, then we remove $(-infinity,perp_bisector_l_foot)$ from free_sides
 				if perp_bisector_l_foot<0:
+					vertical_geodesics.append([[perp_bisector_l_foot,perp_bisector_r_foot],[[perp_bisector_l_foot,0],[perp_bisector_l_foot,infinity]],M,chi_2(frobenius_norm)])
 					free_sides=free_sides.difference(-infinity,perp_bisector_l_foot)
 				# If the vertical perpendicular bisector is right of i, then we remove $(perp_bisector_l_foot,infinity)$ from free_sides	
 				else:
+					vertical_geodesics.append([[perp_bisector_l_foot,perp_bisector_r_foot],[[perp_bisector_l_foot,infinity],[perp_bisector_l_foot,0]],M,chi_2(frobenius_norm)])
 					free_sides=free_sides.difference(perp_bisector_l_foot,infinity)
 			else:
 				perp_bisector_plots.append(arc(perp_bisector_center,perp_bisector_radius,sector=(0,pi)))
@@ -583,7 +584,7 @@ while ContainmentVolume==infinity and iteration<iteration_limit:
 					free_sides=free_sides.difference(perp_bisector_r_foot,infinity)
 				# If the geodesic [perp_bisector_l_foot,perp_bisector_r_foot] does not `enclose' i, then we remove the interval $(perp_bisector_l_foot,perp_bisector_r_foot)$ from free_sides
 				else:
-					geodesics_exposing_I.append([[perp_bisector_l_foot,perp_bisector_r_foot],[[perp_bisector_l_foot,0],[perp_bisector_r_foot,0]],M,chi_2(frobenius_norm)])
+					geodesics_exposing_I.append([[perp_bisector_l_foot,perp_bisector_r_foot],[[perp_bisector_r_foot,0],[perp_bisector_l_foot,0]],M,chi_2(frobenius_norm)])
 					free_sides=free_sides.difference(perp_bisector_l_foot,perp_bisector_r_foot)
 			
 	free_sides_cardinality=free_sides.cardinality()
@@ -592,6 +593,10 @@ while ContainmentVolume==infinity and iteration<iteration_limit:
 
 	Dir_dom_plot=sum(perp_bisector_plots)
 	iteration+=1
+
+######################################################################
+### HERE WE WILL BREAK THE FUNCTION IF ContainmentVolume==infinity ###
+######################################################################
 
 
 # This function constructs the hyperbolic polygon formed as the intersection of half-planes containing I defined by h-lines
@@ -626,16 +631,16 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 							vertex_x=polygon_side[0][0]
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
-							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_y>polygon_side[1][0][0] and vertex_y<polygon_side[1][1][0]:
-								# The 'upper-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								# If the intersection is left of the imaginary axis, then the 'left-most' vertex of gamma becomes this intersection
-								if vertex_x<0:
-									gamma[1][0]=[vertex_x,vertex_y]
-								# If the intersection is right of the imaginary axis, then the 'right-most' vertex of gamma becomes this intersection
-								else:
-									gamma[1][1]=[vertex_x,vertex_y]
+							# Check if polygon_side is left of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+							if vertex_x<0 and vertex_y>polygon_side[1][0][1] and vertex_y<polygon_side[1][1][1]:
+								# Update the clock-wise most vertex of polygon_side and the counter-clock-wise most of gamma
+								polygon_side[1,1]=[vertex_x,vertex_y]
+								gamma[1][0]=[vertex_x,vertex_y]
+							# Check if polygon_side is right of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+							elif vertex_x>0 and vertex_y<polygon_side[1][0][1] and vertex_y>polygon_side[1][1][1]:
+								# Update the counterclock-wise most vertex of polygon_side and the clock-wise most of gamma
+								polygon_side[1,0]=[vertex_x,vertex_y]
+								gamma[1][1]=[vertex_x,vertex_y]
 					# Consider when polygon_side is not vertical
 					else: 
 						l_polygon_side=polygon_side[0][0]
@@ -651,9 +656,9 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 								vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 								# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 								if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:								
-									# The 'right-most' vertex of polygon_side becomes this intersection
+									# The clockwise-most vertex of polygon_side becomes this intersection
 									polygon_side[1][1]=[vertex_x,vertex_y]
-									# The 'left-most' vertex of gamma becomes this intersection
+									# The counterclockwise-most vertex of gamma becomes this intersection
 									gamma[1][0]=[vertex_x,vertex_y]
 							elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 								# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
@@ -663,9 +668,9 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 								vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 								# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 								if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:								
-									# The 'left-most' vertex of polygon_side becomes this intersection
+									# The counterclockwise-most vertex of polygon_side becomes this intersection
 									polygon_side[1][0]=[vertex_x,vertex_y]
-									# The 'right-most' vertex of gamma becomes this intersection
+									# The clockwise-most vertex of gamma becomes this intersection
 									gamma[1][1]=[vertex_x,vertex_y]
 						# Otherwise polygon_side exposes I
 						else:
@@ -677,10 +682,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 								vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 								vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 								# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-								if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:								
-									# The 'right-most' vertex of polygon_side becomes this intersection
-									polygon_side[1][1]=[vertex_x,vertex_y]
-									# The 'right-most' vertex of gamma becomes this intersection
+								if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
+									# The counterclockwise-most vertex of polygon_side becomes this intersection
+									polygon_side[1][0]=[vertex_x,vertex_y]
+									# The clockwise-most vertex of gamma becomes this intersection
 									gamma[1][1]=[vertex_x,vertex_y]
 							elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 								# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
@@ -689,10 +694,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 								vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 								vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 								# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-								if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:								
-									# The 'left-most' vertex of polygon_side becomes this intersection
-									polygon_side[1][0]=[vertex_x,vertex_y]
-									# The 'left-most' vertex of gamma becomes this intersection
+								if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
+									# The clockwise-most vertex of polygon_side becomes this intersection
+									polygon_side[1][1]=[vertex_x,vertex_y]
+									# The counterclockwise-most vertex of gamma becomes this intersection
 									gamma[1][0]=[vertex_x,vertex_y]
 				FreeSides=FreeSides.difference(-infinity,left)
 				FreeSides=FreeSides.difference(right,infinity)															
@@ -717,16 +722,16 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 						# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 						vertex_x=polygon_side[0][0]
 						vertex_y=sqrt(radius^2-(vertex_x-center)^2)
-						# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-						if vertex_y>polygon_side[1][0][0] and vertex_y<polygon_side[1][1][0]:
-							# The 'lower-most' vertex of polygon_side becomes this intersection
-							polygon_side[1][0]=[vertex_x,vertex_y]
-							# If the intersection is left of the imaginary axis, then the 'left-most' vertex of gamma becomes this intersection
-							if vertex_x<0:
-								gamma[1][0]=[vertex_x,vertex_y]
-							# If the intersection is right of the imaginary axis, then the 'right-most' vertex of gamma becomes this intersection
-							else:
-								gamma[1][1]=[vertex_x,vertex_y]
+						# Check if polygon_side is left of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						if vertex_x<0 and vertex_y>polygon_side[1][0][1] and vertex_y<polygon_side[1][1][1]:
+							# Update the counterclock-wise most vertex of polygon_side and the clock-wise most of gamma
+							polygon_side[1,0]=[vertex_x,vertex_y]
+							gamma[1][1]=[vertex_x,vertex_y]
+						# Check if polygon_side is right of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						elif vertex_x>0 and vertex_y<polygon_side[1][0][1] and vertex_y>polygon_side[1][1][1]:
+							# Update the clock-wise most vertex of polygon_side and the counterclock-wise most of gamma
+							polygon_side[1,1]=[vertex_x,vertex_y]
+							gamma[1][0]=[vertex_x,vertex_y]
 				# Consider when polygon_side is not vertical
 				else: 
 					l_polygon_side=polygon_side[0][0]
@@ -742,10 +747,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:												
-								# The 'left-most' vertex of polygon_side becomes this intersection
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
-								gamma[1][0]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of gamma becomes this intersection
+								gamma[1][1]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 							center_polygon_side=(r_polygon_side+l_polygon_side)/2
@@ -754,10 +759,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:											
-								# The 'right-most' vertex of polygon_side becomes this intersection
+								# The clockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
-								gamma[1][1]=[vertex_x,vertex_y]
+								# The counterclockwise-most vertex of gamma becomes this intersection
+								gamma[1][0]=[vertex_x,vertex_y]
 					# Otherwise polygon_side exposes I
 					else:
 						# Check if gamma and polygon_side intersect
@@ -768,11 +773,11 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:														
-								# The 'left-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
-								gamma[1][1]=[vertex_x,vertex_y]
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:														
+								# The clockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][1]=[vertex_x,vertex_y]
+								# The counterclockwise-most vertex of gamma becomes this intersection
+								gamma[1][0]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 							center_polygon_side=(r_polygon_side+l_polygon_side)/2
@@ -780,80 +785,64 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:																
-								# The 'right-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
-								gamma[1][0]=[vertex_x,vertex_y]						
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:																
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][0]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of gamma becomes this intersection
+								gamma[1][1]=[vertex_x,vertex_y]						
 			FreeSides=FreeSides.difference(left,right)
 			polygon.append(gamma)
 
 	# Find the vertical sides contributing to polygon, if any
 	if len(vertical_geods_copy)>=2:
-		closest_vertical_geods=vertical_geods_copy[:2]
-		for gamma in closest_vertical_geods:
-			append_to_polygon=False
+		polygon_copy=deepcopy(polygon)
+		# We only need the closest two vertical geodesics
+		for gamma in vertical_geods_copy[:2]:
+			# If there are no geodesics enclosing I, then we must include the two closest vertical geodesics as sides of the polygon for the polygon to have finite area
+			if len(geods_enclosing_I)==0:
+				append_to_polygon=True
+			# Otherwise, the vertical geodesics must be shown to intersect a segment of some polygon_side contributing to the polygon
+			else:
+				append_to_polygon=False
 			# The finite foot determining gamma
 			left=gamma[0][0]
-			# Check if geods_enclosing_I is not empty; if this is the case, then gamma must intersect some segment contributing to the side polygon of some polygon_side enclosing I in order for gamma to be included in polygon (if not, then gamma lies too far left or right of polygon to contribute to its sides)
-			if len(geods_enclosing_I)>0:
-				for polygon_side in polygon:
-					# Check if gamma intersects the segment of polygon_side contributing to polygon
-					if left>polygon_side[1][0][0] and left<polygon_side[1][1][0]:
-						l_polygon_side=polygon_side[0][0]
-						r_polygon_side=polygon_side[0][1]
-						center_polygon_side=(r_polygon_side+l_polygon_side)/2
-						radius_polygon_side=(r_polygon_side-l_polygon_side)/2
-						vertex_x=left
-						vertex_y=sqrt(radius_polygon_side^2-(left-center_polygon_side)^2)
-						# Check if polygon_side encloses I
-						if l_polygon_side*r_polygon_side<-1:
-							append_to_polygon=True
-							# If gamma is left of the imaginary axis, then the 'left-most' vertex of polygon_side and the 'upper-most' vertex of gamma become the intersection of gamma and polygon_side
-							if left<0:
-								FreeSides=FreeSides.difference(-infinity,left)
-								polygon_side[1][0]=[vertex_x,vertex_y]
-								gamma[1][1]=[vertex_x,vertex_y]
-							# If gamma is right of the imaginary axis, then the 'right-most' vertex of polygon_side and the 'upper-most' vertex of gamma become the intersection of gamma and polygon_side
-							else:
-								FreeSides=FreeSides.difference(left,infinity)
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								gamma[1][1]=[vertex_x,vertex_y]
-						# Otherwise polygon_side exposes I
-						else:
-							# If gamma is left of the imaginary axis, then the 'left-most' vertex of polygon_side and the 'lower-most' vertex of gamma become the intersection of gamma and polygon_side
-							if left<0:
-								FreeSides=FreeSides.difference(-infinity,left)								
-								polygon_side[1][0]=[vertex_x,vertex_y]
-								gamma[1][0]=[vertex_x,vertex_y]
-							# If gamma is right of the imaginary axis, then the 'right-most' vertex of polygon_side and the 'lower-most' vertex of gamma become the intersection of gamma and polygon_side
-							else:
-								FreeSides=FreeSides.difference(left,infinity)
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								gamma[1][0]=[vertex_x,vertex_y]
-			# If geods_enclosing_I is empty, then gamma is included in polygon by default (otherwise the polygon would have infinite area as it would always have free sides)
-			else:
-				append_to_polygon=True
-				for polygon_side in polygon:
-					# Check if gamma intersects the segment of polygon_side contributing to polygon
-					if left>polygon_side[1][0][0] and l<polygon_side[1][1][0]:
-						l_polygon_side=polygon_side[0][0]
-						r_polygon_side=polygon_side[0][1]
-						center_polygon_side=(r_polygon_side+l_polygon_side)/2
-						radius_polygon_side=(r_polygon_side-l_polygon_side)/2
-						vertex_x=left
-						vertex_y=sqrt(radius_polygon_side^2-(left-center_polygon_side)^2)
-						# Here each polygon_side exposes I by assumption
-						# If gamma is left of the imaginary axis, then the 'left-most' vertex of polygon_side and the 'lower-most' vertex of gamma become the intersection of gamma and polygon_side
-						if left<0:
-							FreeSides=FreeSides.difference(-infinity,left)							
-							polygon_side[1][0]=[vertex_x,vertex_y]
-							gamma[1][0]=[vertex_x,vertex_y]
-						# If gamma is right of the imaginary axis, then the 'right-most' vertex of polygon_side and the 'lower-most' vertex of gamma become the intersection of gamma and polygon_side
-						else:
-							FreeSides=FreeSides.difference(left,infinity)							
-							polygon_side[1][1]=[vertex_x,vertex_y]
-							gamma[1][0]=[vertex_x,vertex_y]											
+			for polygon_side in polygon_copy:
+				l_polygon_side=polygon_side[0][0]
+				r_polygon_side=polygon_side[0][1]
+				center_polygon_side=(r_polygon_side+l_polygon_side)/2
+				radius_polygon_side=(r_polygon_side-l_polygon_side)/2
+				# Check if polygon_side encloses I and gamma intersects the segment of polygon_side contributing to polygon
+				if l_polygon_side*r_polygon_side<-1 and left>polygon_side[1][0][0] and left<polygon_side[1][1][0]:
+					append_to_polygon=True
+					vertex_x=left
+					vertex_y=sqrt(radius_polygon_side^2-(left-center_polygon_side)^2)
+					# Check if gamma is left of the imaginary axis
+					if left<0:
+						FreeSides=FreeSides.difference(-infinity,left)
+						# The counterclockwise-most vertex of polygon_side and the clockwise-most vertex of gamma become the intersection of gamma and polygon_side
+						polygon_side[1][0]=[vertex_x,vertex_y]
+						gamma[1][1]=[vertex_x,vertex_y]
+					# Otherwise gamma is right of the imaginary axis
+					else:
+						FreeSides=FreeSides.difference(left,infinity)
+						# The clockwise-most vertex of polygon_side and the counterclockwise-most vertex of gamma become the intersection of gamma and polygon_side
+						polygon_side[1][1]=[vertex_x,vertex_y]
+						gamma[1][0]=[vertex_x,vertex_y]	
+				# Check if polygon_side exposes I and gamma intersects the segment of polygon_side contributing to polygon
+				elif l_polygon_side*r_polygon_side>-1 and left<polygon_side[1][0][0] and left>polygon_side[1][1][0]:
+					append_to_polygon=True
+					vertex_x=left
+					vertex_y=sqrt(radius_polygon_side^2-(left-center_polygon_side)^2)					
+					# If gamma is left of the imaginary axis, then the clockwise-most vertex of polygon_side and the counterclockwise-most vertex of gamma become the intersection of gamma and polygon_side
+					if left<0:
+						FreeSides=FreeSides.difference(-infinity,left)								
+						polygon_side[1][1]=[vertex_x,vertex_y]
+						gamma[1][0]=[vertex_x,vertex_y]							
+					# If gamma is right of the imaginary axis, then the counterclockwise-most vertex of polygon_side and the clockwise-most vertex of gamma become the intersection of gamma and polygon_side
+					else:
+						FreeSides=FreeSides.difference(left,infinity)
+						polygon_side[1][0]=[vertex_x,vertex_y]
+						gamma[1][1]=[vertex_x,vertex_y]								
 			if append_to_polygon==True:
 				polygon.append(gamma)
 
@@ -876,18 +865,20 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 						# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 						vertex_x=polygon_side[0][0]
 						vertex_y=sqrt(radius^2-(vertex_x-center)^2)
-						# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-						if vertex_y>polygon_side[1][0][0] and vertex_y<polygon_side[1][1][0]:
+						# Check if polygon_side is left of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						if vertex_x<0 and vertex_y>polygon_side[1][0][1] and vertex_y<polygon_side[1][1][1]:
 							geods_enclosing_I_copy.remove(gamma)
-							append_to_polygon=True
-							# The 'upper-most' vertex of polygon_side becomes this intersection
-							polygon_side[1][1]=[vertex_x,vertex_y]
-							# If the intersection is left of the imaginary axis, then the 'left-most' vertex of gamma becomes this intersection
-							if vertex_x<0:
-								gamma[1][0]=[vertex_x,vertex_y]
-							# If the intersection is right of the imaginary axis, then the 'right-most' vertex of gamma becomes this intersection
-							else:
-								gamma[1][1]=[vertex_x,vertex_y]
+							append_to_polygon=True							
+							# Update the clock-wise most vertex of polygon_side and the counter-clock-wise most of gamma
+							polygon_side[1,1]=[vertex_x,vertex_y]
+							gamma[1][0]=[vertex_x,vertex_y]
+						# Check if polygon_side is right of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						elif vertex_x>0 and vertex_y<polygon_side[1][0][1] and vertex_y>polygon_side[1][1][1]:
+							geods_enclosing_I_copy.remove(gamma)
+							append_to_polygon=True						
+							# Update the counterclock-wise most vertex of polygon_side and the clock-wise most of gamma
+							polygon_side[1,0]=[vertex_x,vertex_y]
+							gamma[1][1]=[vertex_x,vertex_y]
 				# Consider when polygon_side is not vertical
 				else: 
 					l_polygon_side=polygon_side[0][0]
@@ -904,10 +895,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
 								geods_enclosing_I_copy.remove(gamma)
-								append_to_polygon=True
-								# The 'right-most' vertex of polygon_side becomes this intersection
+								append_to_polygon=True								
+								# The clockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
+								# The counterclockwise-most vertex of gamma becomes this intersection
 								gamma[1][0]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
@@ -918,10 +909,10 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
 								geods_enclosing_I_copy.remove(gamma)
-								append_to_polygon=True
-								# The 'left-most' vertex of polygon_side becomes this intersection
+								append_to_polygon=True								
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
+								# The clockwise-most vertex of gamma becomes this intersection
 								gamma[1][1]=[vertex_x,vertex_y]
 					# Otherwise polygon_side exposes I
 					else:
@@ -933,12 +924,12 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
 								geods_enclosing_I_copy.remove(gamma)
 								append_to_polygon=True
-								# The 'right-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][0]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of gamma becomes this intersection
 								gamma[1][1]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
@@ -947,19 +938,20 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
 								geods_enclosing_I_copy.remove(gamma)
 								append_to_polygon=True
-								# The 'left-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
+								# The clockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][1]=[vertex_x,vertex_y]
+								# The counterclockwise-most vertex of gamma becomes this intersection
 								gamma[1][0]=[vertex_x,vertex_y]		
 			if append_to_polygon==True:
+				FreeSides=FreeSides.difference(-infinity,left)
+				FreeSides=FreeSides.difference(right,infinity)				
 				polygon.append(gamma)
 
 		# Here we find geodesics gamma exposing I that do not intersect an already existing side of polygon, but such that the interval between the feet of gamma is contained in a free side of the polygon, and this interval is maximal in the sense that for all other gamma' satisfying this condition, the interval beween the feet of gamma' does not contain the interval between the feet of gamma
 		for i in range(FreeSides.n_components()):
-			geods_exposing_I_copy2=deepcopy(geods_exposing_I_copy)
 			# We find the i^th connected component of FreeSides and make sure it is not a singleton
 			J=FreeSides.get_interval(i)
 			J_dummy=RealSet(J)
@@ -967,8 +959,7 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 				lower_bound=J.lower()
 				# Find all geodesics gamma whose left foot is at the lower bound of the interval J of FreeSides
 				gammas_with_left_foot_at_lower_bound=[]
-				for gamma in geods_exposing_I_copy2:
-				# for gamma in geods_exposing_I_copy:
+				for gamma in geods_exposing_I_copy:
 					if gamma[0][0]==lower_bound:
 						gammas_with_left_foot_at_lower_bound.append(gamma)
 				if len(gammas_with_left_foot_at_lower_bound)>0:
@@ -997,19 +988,20 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 						# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 						vertex_x=polygon_side[0][0]
 						vertex_y=sqrt(radius^2-(vertex_x-center)^2)
-						# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-						if vertex_y>polygon_side[1][0][0] and vertex_y<polygon_side[1][1][0]:
-							FreeSides=FreeSides.difference(left,right)
+						# Check if polygon_side is left of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						if vertex_x<0 and vertex_y>polygon_side[1][0][1] and vertex_y<polygon_side[1][1][1]:
 							geods_exposing_I_copy.remove(gamma)
-							append_to_polygon=True
-							# The 'lower-most' vertex of polygon_side becomes this intersection
-							polygon_side[1][0]=[vertex_x,vertex_y]
-							# If the intersection is left of the imaginary axis, then the 'left-most' vertex of gamma becomes this intersection
-							if vertex_x<0:
-								gamma[1][0]=[vertex_x,vertex_y]
-							# If the intersection is right of the imaginary axis, then the 'right-most' vertex of gamma becomes this intersection
-							else:
-								gamma[1][1]=[vertex_x,vertex_y]
+							append_to_polygon=True							
+							# Update the counterclock-wise most vertex of polygon_side and the clock-wise most of gamma
+							polygon_side[1,0]=[vertex_x,vertex_y]
+							gamma[1][1]=[vertex_x,vertex_y]
+						# Check if polygon_side is right of the imaginary axis, and the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
+						elif vertex_x>0 and vertex_y<polygon_side[1][0][1] and vertex_y>polygon_side[1][1][1]:
+							geods_exposing_I_copy.remove(gamma)
+							append_to_polygon=True						
+							# Update the clock-wise most vertex of polygon_side and the counterclock-wise most of gamma
+							polygon_side[1,1]=[vertex_x,vertex_y]
+							gamma[1][0]=[vertex_x,vertex_y]
 				# Consider when polygon_side is not vertical
 				else: 
 					l_polygon_side=polygon_side[0][0]
@@ -1025,13 +1017,12 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
-								FreeSides=FreeSides.difference(left,right)
 								geods_exposing_I_copy.remove(gamma)								
 								append_to_polygon=True
-								# The 'left-most' vertex of polygon_side becomes this intersection
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
-								gamma[1][0]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of gamma becomes this intersection
+								gamma[1][1]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 							center_polygon_side=(r_polygon_side+l_polygon_side)/2
@@ -1040,13 +1031,12 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
 							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
-								FreeSides=FreeSides.difference(left,right)
 								geods_exposing_I_copy.remove(gamma)								
 								append_to_polygon=True
-								# The 'right-most' vertex of polygon_side becomes this intersection
+								# The clockwise-most vertex of polygon_side becomes this intersection
 								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
-								gamma[1][1]=[vertex_x,vertex_y]
+								# The counterclockwise-most vertex of gamma becomes this intersection
+								gamma[1][0]=[vertex_x,vertex_y]
 					# Otherwise polygon_side exposes I
 					else:
 						# Check if gamma and polygon_side intersect
@@ -1057,14 +1047,13 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
-								FreeSides=FreeSides.difference(left,right)
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
 								geods_exposing_I_copy.remove(gamma)								
 								append_to_polygon=True								
-								# The 'left-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][0]=[vertex_x,vertex_y]
-								# The 'right-most' vertex of gamma becomes this intersection
-								gamma[1][1]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][1]=[vertex_x,vertex_y]
+								# The counterclockwise-most vertex of gamma becomes this intersection
+								gamma[1][0]=[vertex_x,vertex_y]
 						elif (l_polygon_side<left and r_polygon_side>left and r_polygon_side<right):
 							# Find the intersection vertex_x+I*vertex_y of gamma and polygon_side
 							center_polygon_side=(r_polygon_side+l_polygon_side)/2
@@ -1072,23 +1061,266 @@ def Omega(vertical_geods,geods_enclosing_I,geods_exposing_I):
 							vertex_x=(radius_polygon_side^2-center_polygon_side^2-(radius^2-center^2))/(2*(center-center_polygon_side))
 							vertex_y=sqrt(radius^2-(vertex_x-center)^2)
 							# Check that the intersection is in the interior of the segment of polygon_side contributing to the side of the polygon
-							if vertex_x>polygon_side[1][0][0] and vertex_x<polygon_side[1][1][0]:
-								FreeSides=FreeSides.difference(left,right)
+							if vertex_x>polygon_side[1][1][0] and vertex_x<polygon_side[1][0][0]:
 								geods_exposing_I_copy.remove(gamma)								
 								append_to_polygon=True							
-								# The 'right-most' vertex of polygon_side becomes this intersection
-								polygon_side[1][1]=[vertex_x,vertex_y]
-								# The 'left-most' vertex of gamma becomes this intersection
-								gamma[1][0]=[vertex_x,vertex_y]	
+								# The counterclockwise-most vertex of polygon_side becomes this intersection
+								polygon_side[1][0]=[vertex_x,vertex_y]
+								# The clockwise-most vertex of gamma becomes this intersection
+								gamma[1][1]=[vertex_x,vertex_y]
 			if append_to_polygon==True:
+				FreeSides=FreeSides.difference(left,right)
 				polygon.append(gamma)
-
 	return polygon
 
-a=Omega(vertical_geodesics,geodesics_enclosing_I,geodesics_exposing_I)
-b=[a[i][0] for i in range(len(a))]
-c=[[((b[i][0]+b[i][1])/2,0),(b[i][1]-b[i][0])/2] for i in range(len(a))]
-arcs=[arc(c[i][0],c[i][1],sector=(0,pi)) for i in range(len(a))]
+
+def PolygonVolume(polygon):
+	polygon_copy=deepcopy(polygon)
+	# For each geodesic gamma contributing to a side of the polygon, we find the unit tangent vectors [[t0x,t0y],[t1x,t1y]] (directed toward the interior of the side of the polygon) at the counterclockwise- and clockwise-most vertices, respectively, of gamma and append this list to the list describing gamma; if the vertex is at infinity we let the tangent vector be [0,-1]
+	for gamma in polygon_copy:
+		# We will replace each empty list in this list with a tangent vector; the first vector will correspond to the counter-clockwise most vertex (when viewed from the interior of the polygon), and the second will correspond to the clockwise-most vertex
+		gamma.append([[],[]])
+		left=gamma[0][0]
+		right=gamma[0][1]
+
+		# We first consider vertical geodesics
+		if right==infinity:
+			# If gamma lies left of the imaginary axis, then the first tangent vector will point straight up and the second will point straight down
+			if left<0:
+				gamma[-1][0]=[0,1]
+				gamma[-1][1]=[0,-1]
+			# If gamma lies right of the imaginary axis, then the first tangent vector will point straight down and the second will point straight up
+			else:
+				gamma[-1][0]=[0,-1]
+				gamma[-1][1]=[0,1]
+		else:
+			# Center and radius of semicircle describing gamma
+			center=(right+left)/2
+			radius=(right-left)/2
+			# Now we consider geodesics enclosing I
+			if left*right<-1:
+				vertex0=gamma[1][0]
+				vertex0_x=vertex0[0]
+				vertex0_y=vertex0[1]
+				# If vertex0 is on the real line, then the corresponding tangent vector points straight up
+				if vertex0_y==0:
+					gamma[-1][0]=[0,1]
+				# Otherwise we find the slope of the unit tangent vector at vertex0 and compute its real and imaginary parts
+				else:
+					tangent_slope=(center-vertex0_x)/(radius^2-(vertex0_x-center)^2)^(1/2)
+					normalizer=(tangent_slope^2+1)^(1/2)
+					gamma[-1][0]=[1/normalizer,tangent_slope/normalizer]
+
+				# Similarly for vertex1; note that these tangent vectors are oriented in the opposite direction to point toward the interior of the side of the polygon
+				vertex1=gamma[1][1]
+				vertex1_x=vertex1[0]
+				vertex1_y=vertex1[1]
+				# If vertex1 is on the real line, then the corresponding tangent vector points straight up
+				if vertex1_y==0:
+					gamma[-1][1]=[0,1]
+				# Otherwise we find the slope of the unit tangent vector at vertex1 and compute its real and imaginary parts
+				else:
+					tangent_slope=(center-vertex1_x)/(radius^2-(vertex1_x-center)^2)^(1/2)
+					normalizer=(tangent_slope^2+1)^(1/2)
+					gamma[-1][1]=[-1/normalizer,-tangent_slope/normalizer]
+
+			# Lastly we consider geodesics exposing I
+			else:
+				vertex0=gamma[1][0]
+				vertex0_x=vertex0[0]
+				vertex0_y=vertex0[1]
+				# If vertex0 is on the real line, then the corresponding tangent vector points straight up
+				if vertex0_y==0:
+					gamma[-1][0]=[0,1]
+				# Otherwise we find the slope of the unit tangent vector at vertex0 and compute its real and imaginary parts; these tangent vectors are oriented in the opposite direction to point toward the interior of the side of the polygon
+				else:
+					tangent_slope=(center-vertex0_x)/(radius^2-(vertex0_x-center)^2)^(1/2)
+					normalizer=(tangent_slope^2+1)^(1/2)
+					gamma[-1][0]=[-1/normalizer,-tangent_slope/normalizer]
+				# Similarly for vertex1
+				vertex1=gamma[1][1]
+				vertex1_x=vertex1[0]
+				vertex1_y=vertex1[1]
+				# If vertex1 is on the real line, then the corresponding tangent vector points straight up
+				if vertex1_y==0:
+					gamma[-1][1]=[0,1]
+				# Otherwise we find the slope of the unit tangent vector at vertex1 and compute its real and imaginary parts
+				else:
+					tangent_slope=(center-vertex1_x)/(radius^2-(vertex1_x-center)^2)^(1/2)
+					normalizer=(tangent_slope^2+1)^(1/2)
+					gamma[-1][1]=[1/normalizer,tangent_slope/normalizer]
+
+	# For each side of the polygon, we compute the internal angle of the counterclockwise-most vertex of said side
+	polygon_copy2=deepcopy(polygon_copy)
+	for gamma0 in polygon_copy:
+		# The counterclockwise-most vertex of gamma0
+		vertex=gamma0[1][0]
+		# The unit tangent vector for gamma0 at vertex, and the angle from (1,0) of this vector
+		gamma0_tangent_vector=gamma0[-1][0]
+		gamma0_tangent_vector_angle=ang(gamma0_tangent_vector)
+		# We find the other side the polygon sharing this vertex; we have to treat the case when the vertex is at infinity separately due to how the data is stored
+		if vertex[1]==infinity:
+			# The interior angle of the polygon at vertex is 0
+			gamma0.append(0)
+		else:
+			for i in range(len(polygon_copy2)):
+				gamma1=polygon_copy2[i]
+				if gamma1[1][1]==vertex:
+					gamma1_tangent_vector=gamma1[-1][1]
+					gamma1_tangent_vector_angle=ang(gamma1_tangent_vector)
+					break
+			if gamma0_tangent_vector_angle>=gamma1_tangent_vector_angle:
+				interior_angle=RLF(2*pi)*(gamma0_tangent_vector_angle-gamma1_tangent_vector_angle)
+			else:
+				interior_angle=RLF(2*pi)*(gamma0_tangent_vector_angle-gamma1_tangent_vector_angle+1)
+			gamma0.append(interior_angle)
+	num_vertices=len(polygon_copy)
+	interior_angles_sum=sum([polygon_copy[i][-1] for i in range(num_vertices)])
+	# Application of Gauss-Bonnett Theorem
+	volume=RLF(pi)*(num_vertices-2)-interior_angles_sum
+	return volume
+
+
+# This is a list of the geodesics contributing to sides of the Dirichlet polygon generated by Ar_mod_MinusIdentity
+Omega_Ar=Omega(vertical_geodesics,geodesics_enclosing_I,geodesics_exposing_I)
+# The hyperbolic area of said polygon
+Omega_Ar_Volume=PolygonVolume(Omega_Ar)
+
+# b=[polygon_Ar[i][0] for i in range(len(polygon_Ar))]
+# c=[[((b[i][0]+b[i][1])/2,0),(b[i][1]-b[i][0])/2] for i in range(len(polygon_Ar))]
+# arcs=[arc(c[i][0],c[i][1],sector=(0,pi)) for i in range(len(polygon_Ar))]
 
 ########################################################################################################
 ########################################################################################################
+
+
+
+
+
+
+
+
+
+#######################################
+#######################################
+## 9: Let $BoundingRadius=\chi_2(b)$ ##
+#######################################
+#######################################
+
+BoundingRadius=chi_2(b)
+
+#######################################
+#######################################
+
+
+
+
+
+
+
+
+
+###########################################################################
+###########################################################################
+## 10: Let $BoundedPiece=\Omega(\overline{A_r})\cap B(i,BoundingRadius)$ ##
+###########################################################################
+###########################################################################
+
+# A calculation with the integral definition of hyperbolic distance shows that a hyperbolic ball centered at I with radius BoundingRadius is a Euclidean ball centered at I*cosh*(BoundingRadius)=I*(e^BoundingRadius+e^(-BoundingRadius))/2 with radius sinh(R)=(e^BoundingRadius-e^(-BoundingRadius))/2
+
+
+# For each side of the polygon, find where (if at all) this ball intersects the side...
+# if it intersects two sides sharing a vertex, find the h-line between these two intersections...
+# I think this h-line should lie inside the ball since two circles can intersect at no more than two points...
+# Find the area of the hyperbolic polygon formed from the initial polygon plus these new sides
+# I believe this should give a lower bound on the hyperbolic area of the ball whenever AllSidesRepresented==True
+
+# We artificially let the volume of BoundedPiece be zero here since we'll initially let AllSidesRepresented=False and ParabolicCycles=False
+# We will actually find this lower bound below in step 13
+BoundedPiece_Volume_lower_bound=0
+
+###########################################################################
+###########################################################################
+
+
+
+
+
+
+
+
+
+#########################################
+#########################################
+## 11: Let $AllSidesRepresented=False$ ##
+#########################################
+#########################################
+
+AllSidesRepresented=False
+
+#########################################
+#########################################
+
+
+
+
+
+
+
+
+
+#####################################
+#####################################
+## 12: Let $ParabolicCycles=False$ ##
+#####################################
+#####################################
+
+ParabolicCycles=False
+
+#####################################
+#####################################
+
+
+
+
+
+
+
+
+###############################################################################################################################################################################################################################
+###############################################################################################################################################################################################################################
+## 13: Do while $AllSidesRepresented=False$ or $ParabolicCycles=False$ or $\nu_{\mathbb{H}}(BoundedPiece)\le\nu_{\mathbb{H}}(\Omega(\overline{A}_r))$:																		 ##
+##  (a) Double the value of $r$ and let $b=\chi_1^{-1}(2*\rho/r)$																																							 ##
+##  (b) Recalculate $MP_P^r(X,\omega)$ for each $P\in\Sigma$, compute $A_r$ and $\Omega(\overline{A_r})$																													 ##
+##  (c) Calculate $BoundingRadius=\chi_2(b)$																																												 ##
+##  (d) Let $BoundedPiece=\Omega(\overline{A_r})\cap B(i,BoundingRadius)$																																					 ##
+##  (e) If the only sides of $\Omega(\overline{A_r})$ not contained in $BoundedPiece$ have one endpoint on the line at infinity and the other an interior point of $B(i,BoundedRadius)$, then let $AllSidesRepresented=True$ ##
+##    (i)   Calculate the ideal vertex cycles associated to the side pairing transformations on the sides containing an ideal vertex endpoint																				 ##
+##    (ii)  If all ideal vertex cycles are parabolic, then let $ParabolicCycles=True$																																		 ##
+##    (iii) else let $ParabolicCycles=False$																																												 ##
+##  (f) else let $AllSidesRepresented=False$ and let $ParabolicCycles=False$																																			     ##
+###############################################################################################################################################################################################################################
+###############################################################################################################################################################################################################################
+
+
+while AllSidesRepresented=False or ParabolicCycles=False or BoundedPiece_Volume_lower_bound<=Omega_Ar_Volume
+	r=2*r
+	b=chi_1_inv(2*rho/r)
+	Ar=A_r(r,b)
+	BoundingRadius=chi_2(b)
+	
+
+
+
+
+
+
+
+
+
+###############################################################################################################################################################################################################################
+###############################################################################################################################################################################################################################
+
+
+
+
