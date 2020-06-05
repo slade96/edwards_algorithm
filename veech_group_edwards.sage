@@ -1174,7 +1174,7 @@ def veech_group(X,iteration_limit=10,timeout=1,prec=53):
 	###############################################################################
 	###############################################################################
 
-	# Since steps 11 and 12 declare $AllSidesRepresented=False$ and $ParabolicCycles=False$, we don't actually need to find BoundedPiece yet; the loop in step 13 will be entered regardless
+	# Since step 7.1.11 declares $AllSidesRepresented=False$, we don't actually need to find BoundedPiece yet; the loop in step 13 will be entered regardless
 	# To enter the while loop in step 13 below, we artificially let 0 be a lower bound on the volume of BoundedPiece and 100 the volume of the Dirichlet region corresponding to Ar, and we defer these computations until said loop
 	BoundedPiece_Volume_lower_bound=0
 	Omega_Ar_Volume=100
@@ -1460,7 +1460,7 @@ def veech_group(X,iteration_limit=10,timeout=1,prec=53):
 	###################################################################################################################################################################
 	###################################################################################################################################################################
 
-	# Step 7.2.7 renames the output of Alorithm 7.1 `AssociatedGenerators;' so we do so here
+	# Step 7.2.7 renames the output of Alorithm 7.1 `AssociatedGenerators;' we do so here
 	AssociatedGenerators=SidePairingRepresentatives
 	if ContainsMinusIdentity==True:
 		AssociatedGenerators.append(-matrix.identity(2))
